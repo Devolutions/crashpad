@@ -2,9 +2,24 @@ cmake_minimum_required(VERSION 3.14)
 
 project(padcr)
 
-enable_language(ASM_MASM)
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake")
 
-add_subdirectory(vendor/zlib)
+if(MSVC)
+    include(MSVCRuntime)
+
+    if(NOT DEFINED MSVC_RUNTIME)
+        set(MSVC_RUNTIME "static")
+    endif()
+
+    configure_msvc_runtime()
+    add_compile_options(/wd4530)
+endif()
+
+if(NOT ("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64"))
+    enable_language(ASM_MASM)
+endif()
+
+include_directories("${CMAKE_SOURCE_DIR}/vendor/include")
 
 add_library(
     mini_chromium
@@ -14,7 +29,7 @@ add_library(
     vendor/mini_chromium/base/files/file_path
     vendor/mini_chromium/base/files/scoped_file
     vendor/mini_chromium/base/process/memory
-    vendor/mini_chromium/base/process/process_metrics_win
+    vendor/mini_chromium/base/memory/page_size_win.cc
     vendor/mini_chromium/base/strings/stringprintf
     vendor/mini_chromium/base/strings/string_number_conversions
     vendor/mini_chromium/base/strings/string_util_win
@@ -23,6 +38,7 @@ add_library(
     vendor/mini_chromium/base/synchronization/lock
     vendor/mini_chromium/base/synchronization/lock_impl_win
     vendor/mini_chromium/base/third_party/icu/icu_utf
+    vendor/mini_chromium/base/scoped_clear_last_error_win
 )
 
 target_compile_definitions(
@@ -109,6 +125,15 @@ target_link_libraries(
     mini_chromium
 )
 
+if(NOT ("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64"))
+    set(CRASHPAD_UTIL_ASM
+        vendor/crashpad/util/misc/capture_context_win.asm
+        vendor/crashpad/util/win/safe_terminate_process.asm)
+else()
+    set(CRASHPAD_UTIL_ASM
+        vendor/crashpad/util/misc/capture_context_win_arm64.obj)
+endif()
+
 add_library(
     crashpad_util
     STATIC
@@ -117,9 +142,10 @@ add_library(
     vendor/crashpad/util/file/file_reader
     vendor/crashpad/util/file/file_seeker
     vendor/crashpad/util/file/file_writer
+    vendor/crashpad/util/file/file_helper
     vendor/crashpad/util/file/filesystem_win
     vendor/crashpad/util/file/scoped_remove_file
-    vendor/crashpad/util/misc/capture_context_win.asm
+    vendor/crashpad/util/file/directory_reader_win
     vendor/crashpad/util/misc/initialization_state_dcheck
     vendor/crashpad/util/misc/metrics
     vendor/crashpad/util/misc/paths_win
@@ -156,11 +182,13 @@ add_library(
     vendor/crashpad/util/win/ntstatus_logging
     vendor/crashpad/util/win/process_info
     vendor/crashpad/util/win/registration_protocol_win
-    vendor/crashpad/util/win/safe_terminate_process.asm
     vendor/crashpad/util/win/session_end_watcher
     vendor/crashpad/util/win/scoped_handle
     vendor/crashpad/util/win/scoped_process_suspend
     vendor/crashpad/util/win/scoped_set_event
+    vendor/crashpad/util/win/scoped_local_alloc
+    vendor/crashpad/util/win/loader_lock
+    ${CRASHPAD_UTIL_ASM}
 )
 
 target_compile_definitions(
@@ -173,13 +201,20 @@ target_compile_definitions(
     -DWIN32_LEAN_AND_MEAN
 )
 
+if(NOT DEFINED ZLIB_LIBRARY)
+    message(WARNING "ZLIB_LIBRARY not set")
+endif()
+
+if(NOT DEFINED ZLIB_INCLUDE_DIR)
+    message(WARNING "ZLIB_INCLUDE_DIR not set")
+endif()
+
 target_link_libraries(
     crashpad_util
     PRIVATE
     mini_chromium
     crashpad_compat
-    zlibstatic
-
+    ${ZLIB_LIBRARY}
     user32
     version
     winhttp
@@ -189,8 +224,7 @@ target_include_directories(
     crashpad_util
     PUBLIC
     vendor/crashpad
-    vendor/zlib
-    "$<TARGET_FILE_DIR:zlibstatic>/../"
+    ${ZLIB_INCLUDE_DIR}
 )
 
 add_library(
@@ -335,7 +369,6 @@ target_link_libraries(
     PRIVATE
     mini_chromium
     crashpad_compat
-
     powrprof
 )
 
@@ -423,16 +456,4 @@ target_link_libraries(
     crashpad_snapshot
     crashpad_tools
     getopt
-)
-
-set_source_files_properties(
-    vendor/crashpad/util/misc/capture_context_win.asm
-    PROPERTIES
-    COMPILE_FLAGS "/safeseh"
-)
-
-set_source_files_properties(
-    vendor/crashpad/util/win/safe_terminate_process.asm
-    PROPERTIES
-    COMPILE_FLAGS "/safeseh"
 )
