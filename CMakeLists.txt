@@ -375,6 +375,7 @@ target_link_libraries(
     mini_chromium
     crashpad_compat
     powrprof
+    advapi32
 )
 
 add_executable(
