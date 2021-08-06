@@ -191,6 +191,11 @@ add_library(
     ${CRASHPAD_UTIL_ASM}
 )
 
+if(NOT ("${CMAKE_GENERATOR_PLATFORM}" STREQUAL "ARM64"))
+    set_source_files_properties(${CRASHPAD_UTIL_ASM}
+        PROPERTIES COMPILE_FLAGS "/safeseh")
+endif()
+
 target_compile_definitions(
     crashpad_util
     PRIVATE
@@ -370,6 +375,7 @@ target_link_libraries(
     mini_chromium
     crashpad_compat
     powrprof
+    advapi32
 )
 
 add_executable(
