@@ -1,2 +1,6 @@
+#ifndef CHROMEOS_BUILDFLAGS_H
+#define CHROMEOS_BUILDFLAGS_H
 
 #define BUILDFLAG(_x) _x
+
+#endif // CHROMEOS_BUILDFLAGS_H
